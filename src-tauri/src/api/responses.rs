@@ -3,7 +3,10 @@ use std::{cmp::Ordering, collections::HashMap};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::consts::{RAID_ACTIVITY_HASH, RAID_ACTIVITY_MODE};
+use crate::consts::{
+    DUNGEON_ACTIVITY_HASH, DUNGEON_ACTIVITY_MODE, LOSTSECTOR_ACTIVITY_MODE, RAID_ACTIVITY_HASH,
+    RAID_ACTIVITY_MODE, STRIKE_ACTIVITY_HASH, STRIKE_ACTIVITY_MODE,
+};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -250,6 +253,8 @@ impl<'de> Deserialize<'de> for ActivityInfo {
         struct _Activity {
             original_display_properties: _DisplayProperties,
             activity_mode_types: Option<Vec<usize>>,
+            direct_activity_mode_type: Option<usize>,
+            #[serde(default)]
             activity_type_hash: usize,
             pgcr_image: Option<String>,
         }
@@ -260,23 +265,47 @@ impl<'de> Deserialize<'de> for ActivityInfo {
             name: String,
         }
 
-        // No activity modes in raid definitions :(
-        fn modes_from_hash(hash: usize) -> Vec<usize> {
-            let mut v = vec![];
-
-            if hash == RAID_ACTIVITY_HASH {
-                v.push(RAID_ACTIVITY_MODE);
+        // No activity modes in raid definitions, and newer dungeons
+        // (Vesper's Host, Sundered Doctrine, ...) are missing them too :(
+        fn modes_from_hash(hash: usize) -> Option<usize> {
+            match hash {
+                RAID_ACTIVITY_HASH => Some(RAID_ACTIVITY_MODE),
+                DUNGEON_ACTIVITY_HASH => Some(DUNGEON_ACTIVITY_MODE),
+                STRIKE_ACTIVITY_HASH => Some(STRIKE_ACTIVITY_MODE),
+                _ => None,
             }
-
-            v
         }
 
+        const TRACKED_MODES: [usize; 4] = [
+            RAID_ACTIVITY_MODE,
+            DUNGEON_ACTIVITY_MODE,
+            STRIKE_ACTIVITY_MODE,
+            LOSTSECTOR_ACTIVITY_MODE,
+        ];
+
         let activity = _Activity::deserialize(deserializer)?;
+
+        let mut activity_modes = activity.activity_mode_types.unwrap_or_default();
+
+        // If none of the listed modes is one we track (missing or empty list),
+        // fall back on directActivityModeType, then on activityTypeHash
+        if !activity_modes.iter().any(|m| TRACKED_MODES.contains(m)) {
+            if let Some(m) = activity.direct_activity_mode_type {
+                if TRACKED_MODES.contains(&m) {
+                    activity_modes.push(m);
+                }
+            }
+
+            if !activity_modes.iter().any(|m| TRACKED_MODES.contains(m)) {
+                if let Some(m) = modes_from_hash(activity.activity_type_hash) {
+                    activity_modes.push(m);
+                }
+            }
+        }
+
         Ok(Self {
             name: activity.original_display_properties.name,
-            activity_modes: activity
-                .activity_mode_types
-                .unwrap_or_else(|| modes_from_hash(activity.activity_type_hash)),
+            activity_modes,
             background_image: activity.pgcr_image,
         })
     }
