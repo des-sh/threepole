@@ -14,4 +14,8 @@ pub const DUNGEON_ACTIVITY_MODE: usize = 82;
 pub const STRIKE_ACTIVITY_MODE: usize = 18;
 pub const LOSTSECTOR_ACTIVITY_MODE: usize = 87;
 
+// activityTypeHash (DestinyActivityTypeDefinition) used as a fallback when
+// an activity definition has no activityModeTypes
 pub const RAID_ACTIVITY_HASH: usize = 2043403989;
+pub const DUNGEON_ACTIVITY_HASH: usize = 608898761;
+pub const STRIKE_ACTIVITY_HASH: usize = 4110605575;
